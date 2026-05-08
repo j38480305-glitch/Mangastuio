@@ -5,10 +5,11 @@ const STYLE_SUFFIX = '3D rendered geometric LEGO-style character, minimalist blo
 const NEGATIVE_PROMPT = 'realistic, detailed face, organic shapes, complex anatomy, photorealistic skin, hair, clothing folds, blurry, low quality, distorted';
 
 export interface GenerationResult {
-  image: string;
-  model: string;
-  prompt: string;
+  image?: string;
+  model?: string;
+  prompt?: string;
   error?: string;
+  estimated_time?: number;
 }
 
 export async function generateImage(prompt: string, seed?: number): Promise<GenerationResult> {
@@ -24,14 +25,22 @@ export async function generateImage(prompt: string, seed?: number): Promise<Gene
   });
 
   const result = await response.json();
+
+  if (!response.ok || result.error) {
+    return {
+      error: result.error || `Request failed with status ${response.status}`,
+      estimated_time: result.estimated_time,
+    };
+  }
+
   return result;
 }
 
 export function buildCharacterPrompt(description: string, pose?: string, expression?: string): string {
-  let prompt = description;
-  if (pose) prompt += `, ${pose}`;
-  if (expression) prompt += `, ${expression}`;
-  return prompt;
+  let fullPrompt = description;
+  if (pose) fullPrompt += `, ${pose}`;
+  if (expression) fullPrompt += `, ${expression}`;
+  return fullPrompt;
 }
 
 export { STYLE_SUFFIX, NEGATIVE_PROMPT };

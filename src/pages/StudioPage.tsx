@@ -9,7 +9,7 @@ import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
 import { Modal } from '../components/ui/Modal';
-import { Sparkles, Save, ImagePlus, Wand2, Grid3x3, BookOpen, Plus, Trash2, Download } from 'lucide-react';
+import { Sparkles, Save, ImagePlus, Wand2, Grid3x3, BookOpen, Plus, Trash2, Download, AlertCircle, RefreshCw, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface GeneratedImage {
@@ -54,6 +54,8 @@ export function StudioPage() {
   const [generating, setGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
 
   // Series management
   const [seriesList, setSeriesList] = useState<any[]>([]);
@@ -69,20 +71,36 @@ export function StudioPage() {
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;
     setGenerating(true);
+    setGenError(null);
+    setRetryAfter(null);
+
     try {
       const result = await generateImage(prompt, seed);
-      if (result.image) {
+
+      if (result.error) {
+        setGenError(result.error);
+        if (result.estimated_time) {
+          setRetryAfter(Math.ceil(result.estimated_time));
+        }
+      } else if (result.image) {
         setGeneratedImages((prev) => [
-          { url: result.image, prompt: result.prompt, seed, timestamp: Date.now() },
+          { url: result.image!, prompt: result.prompt || '', seed, timestamp: Date.now() },
           ...prev,
         ]);
+        setGenError(null);
       }
     } catch (err) {
-      console.error('Generation failed:', err);
+      setGenError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
     } finally {
       setGenerating(false);
     }
   }, [prompt, seed]);
+
+  const handleRetry = useCallback(() => {
+    setGenError(null);
+    setRetryAfter(null);
+    handleGenerate();
+  }, [handleGenerate]);
 
   const handlePresetSelect = (preset: typeof CHARACTER_PRESETS[number]) => {
     setPrompt(preset.prompt);
@@ -235,6 +253,31 @@ export function StudioPage() {
                     <p className="text-xs text-sand-400">
                       Use the same seed with similar prompts for consistent character appearances.
                     </p>
+
+                    {/* Error Display */}
+                    {genError && (
+                      <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm text-red-700">{genError}</p>
+                            {retryAfter && (
+                              <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                <Clock size={12} /> Model is loading. Try again in ~{retryAfter}s.
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={handleRetry}
+                            className="flex-shrink-0 rounded-lg p-1 text-red-500 hover:bg-red-100 transition-colors"
+                            title="Retry"
+                          >
+                            <RefreshCw size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <Button
                       onClick={handleGenerate}
                       disabled={generating || !prompt.trim()}
@@ -250,6 +293,10 @@ export function StudioPage() {
                         </>
                       )}
                     </Button>
+
+                    <p className="text-xs text-sand-400 text-center">
+                      First generation may take 30-60s while the AI model loads.
+                    </p>
                   </CardBody>
                 </Card>
               </div>

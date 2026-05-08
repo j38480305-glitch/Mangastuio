@@ -15,6 +15,34 @@ const MODELS = [
   "runwayml/stable-diffusion-v1-5",
 ];
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+async function callHuggingFace(model: string, apiKey: string, fullPrompt: string, parameters: Record<string, unknown>): Promise<Response> {
+  return fetch(
+    `https://api-inference.huggingface.co/models/${model}`,
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      body: JSON.stringify({
+        inputs: fullPrompt,
+        parameters,
+      }),
+    }
+  );
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -51,53 +79,43 @@ Deno.serve(async (req: Request) => {
       parameters.seed = Number(seed);
     }
 
-    const response = await fetch(
-      `https://api-inference.huggingface.co/models/${selectedModel}`,
-      {
-        headers: {
-          Authorization: `Bearer ${hfApiKey}`,
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-        body: JSON.stringify({
-          inputs: fullPrompt,
-          parameters,
-        }),
-      }
-    );
+    let response = await callHuggingFace(selectedModel, hfApiKey, fullPrompt, parameters);
 
+    // If primary model fails, try fallback
     if (!response.ok) {
       const errorText = await response.text();
-      // If primary model fails, try fallback
+
       if (selectedModel === MODELS[0]) {
-        const fallbackResponse = await fetch(
-          `https://api-inference.huggingface.co/models/${MODELS[1]}`,
-          {
-            headers: {
-              Authorization: `Bearer ${hfApiKey}`,
-              "Content-Type": "application/json",
-            },
-            method: "POST",
-            body: JSON.stringify({
-              inputs: fullPrompt,
-              parameters,
-            }),
-          }
-        );
+        const fallbackResponse = await callHuggingFace(MODELS[1], hfApiKey, fullPrompt, parameters);
 
         if (fallbackResponse.ok) {
-          const imageBlob = await fallbackResponse.blob();
-          const arrayBuffer = await imageBlob.arrayBuffer();
-          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-          return new Response(
-            JSON.stringify({
-              image: `data:${imageBlob.type};base64,${base64}`,
-              model: MODELS[1],
-              prompt: fullPrompt,
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          const contentType = fallbackResponse.headers.get("Content-Type") || "image/png";
+
+          if (contentType.includes("image")) {
+            const imageBuffer = await fallbackResponse.arrayBuffer();
+            const base64 = arrayBufferToBase64(imageBuffer);
+            return new Response(
+              JSON.stringify({
+                image: `data:${contentType};base64,${base64}`,
+                model: MODELS[1],
+                prompt: fullPrompt,
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            const json = await fallbackResponse.json();
+            return new Response(
+              JSON.stringify({ error: json.error || "Model is loading, please try again in 30 seconds", estimated_time: json.estimated_time }),
+              { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         }
+
+        const fallbackError = await fallbackResponse.text();
+        return new Response(JSON.stringify({ error: `Both models failed. Primary: ${errorText}. Fallback: ${fallbackError}` }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       return new Response(JSON.stringify({ error: `Image generation failed: ${errorText}` }), {
@@ -106,18 +124,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const imageBlob = await response.blob();
-    const arrayBuffer = await imageBlob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const contentType = response.headers.get("Content-Type") || "image/png";
 
-    return new Response(
-      JSON.stringify({
-        image: `data:${imageBlob.type};base64,${base64}`,
-        model: selectedModel,
-        prompt: fullPrompt,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    if (contentType.includes("image")) {
+      const imageBuffer = await response.arrayBuffer();
+      const base64 = arrayBufferToBase64(imageBuffer);
+      return new Response(
+        JSON.stringify({
+          image: `data:${contentType};base64,${base64}`,
+          model: selectedModel,
+          prompt: fullPrompt,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } else {
+      const json = await response.json();
+      return new Response(
+        JSON.stringify({ error: json.error || "Model is loading, please try again in 30 seconds", estimated_time: json.estimated_time }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message || "Internal server error" }),
