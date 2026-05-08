@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-sand-50 text-terracotta-900 font-sans;
+  }
+
+  ::selection {
+    @apply bg-terracotta-200 text-terracotta-900;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-terracotta-400 ring-offset-2;
+  }
+}
+
+@layer components {
+  .page-container {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-heading {
+    @apply font-display text-2xl font-bold text-terracotta-900 sm:text-3xl;
+  }
+
+  .glass-card {
+    @apply rounded-2xl border border-white/20 bg-white/80 backdrop-blur-xl shadow-lg;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-terracotta-600 to-ochre-500 bg-clip-text text-transparent;
+  }
+
+  .manga-panel-shadow {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
