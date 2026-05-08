@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="./vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TerraManga - AI-Powered Manga Creation Platform</title>
     <meta name="description" content="Create, share, and discover manga with AI-powered geometric character generation. TerraManga is the all-in-one platform for manga creators." />
@@ -11,7 +11,18 @@
     <meta property="og:image" content="https://images.pexels.com/photos/7682193/pexels-photo-7682193.jpeg?auto=compress&cs=tinysrgb&w=1200" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="TerraManga - AI-Powered Manga Creation Platform" />
+    <meta name="twitter:description" content="Create stunning geometric manga characters with AI. TerraManga is the all-in-one platform for manga creators." />
     <meta name="twitter:image" content="https://images.pexels.com/photos/7682193/pexels-photo-7682193.jpeg?auto=compress&cs=tinysrgb&w=1200" />
+    <script>
+      (function(l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search.slice(1).split('&').map(function(s) {
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash);
+        }
+      }(window.location))
+    </script>
   </head>
   <body>
     <div id="root"></div>

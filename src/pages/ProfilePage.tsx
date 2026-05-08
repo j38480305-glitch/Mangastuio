@@ -2,19 +2,45 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { useToast } from '../hooks/useToast';
+import { ToastContainer } from '../components/ui/ToastContainer';
 import { Button } from '../components/ui/Button';
 import { Card, CardBody } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
 import { Modal } from '../components/ui/Modal';
-import { User, BookOpen, Heart, CreditCard as Edit3 } from 'lucide-react';
+import { User, BookOpen, Heart, Pencil } from 'lucide-react';
+
+interface ProfileData {
+  id: string;
+  username: string;
+  display_name: string;
+  bio: string;
+  avatar_url: string;
+  is_creator: boolean;
+}
+
+interface SeriesData {
+  id: string;
+  title: string;
+  description: string;
+  genre: string[];
+  is_published: boolean;
+}
+
+interface BookmarkData {
+  id: string;
+  series_id: string;
+  manga_series: { title: string } | null;
+}
 
 export function ProfilePage() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<any>(null);
-  const [series, setSeries] = useState<any[]>([]);
-  const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const { toasts, show: showToast, dismiss } = useToast();
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [series, setSeries] = useState<SeriesData[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkData[]>([]);
   const [activeTab, setActiveTab] = useState<'series' | 'bookmarks'>('series');
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({ display_name: '', bio: '' });
@@ -24,16 +50,16 @@ export function ProfilePage() {
     supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         if (data) {
-          setProfile(data);
+          setProfile(data as ProfileData);
           setEditForm({ display_name: data.display_name, bio: data.bio });
         }
       });
 
     supabase.from('manga_series').select('*').eq('creator_id', user.id)
-      .then(({ data }) => { if (data) setSeries(data); });
+      .then(({ data }) => { if (data) setSeries(data as SeriesData[]); });
 
-    supabase.from('bookmarks').select('*, manga_series(*)').eq('user_id', user.id)
-      .then(({ data }) => { if (data) setBookmarks(data); });
+    supabase.from('bookmarks').select('*, manga_series(title)').eq('user_id', user.id)
+      .then(({ data }) => { if (data) setBookmarks(data as BookmarkData[]); });
   }, [user]);
 
   const handleSaveProfile = async () => {
@@ -45,8 +71,9 @@ export function ProfilePage() {
       .select()
       .maybeSingle();
     if (data) {
-      setProfile(data);
+      setProfile(data as ProfileData);
       setShowEdit(false);
+      showToast('Profile updated!');
     }
   };
 
@@ -63,12 +90,14 @@ export function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-sand-50">
+      <ToastContainer toasts={toasts} dismiss={dismiss} />
+
       {/* Profile Header */}
       <div className="bg-gradient-to-br from-terracotta-600 to-terracotta-800 pb-20">
         <div className="page-container pt-8">
           <div className="flex items-center justify-end">
             <Button variant="ghost" size="sm" className="text-white/80 hover:bg-white/10 gap-2" onClick={() => setShowEdit(true)}>
-              <Edit3 size={14} /> Edit Profile
+              <Pencil size={14} /> Edit Profile
             </Button>
           </div>
         </div>
@@ -128,7 +157,7 @@ export function ProfilePage() {
                   <p className="text-sm">No series created yet</p>
                   <Link to="/studio">
                     <Button size="sm" className="mt-3 gap-2">
-                      <Edit3 size={14} /> Create Your First Series
+                      <Pencil size={14} /> Create Your First Series
                     </Button>
                   </Link>
                 </CardBody>
@@ -136,17 +165,22 @@ export function ProfilePage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {series.map((s) => (
-                  <Card key={s.id} hover>
-                    <CardBody>
-                      <h3 className="font-semibold text-terracotta-900">{s.title}</h3>
-                      <p className="mt-1 text-sm text-sand-500 line-clamp-2">{s.description}</p>
-                      <div className="mt-3 flex gap-2">
-                        <Badge variant={s.is_published ? 'success' : 'warning'}>
-                          {s.is_published ? 'Published' : 'Draft'}
-                        </Badge>
-                      </div>
-                    </CardBody>
-                  </Card>
+                  <Link key={s.id} to={`/manga/${s.id}`}>
+                    <Card hover>
+                      <CardBody>
+                        <h3 className="font-semibold text-terracotta-900">{s.title}</h3>
+                        <p className="mt-1 text-sm text-sand-500 line-clamp-2">{s.description}</p>
+                        <div className="mt-3 flex gap-2">
+                          {s.genre?.map((g: string) => (
+                            <Badge key={g}>{g}</Badge>
+                          ))}
+                          <Badge variant={s.is_published ? 'success' : 'warning'}>
+                            {s.is_published ? 'Published' : 'Draft'}
+                          </Badge>
+                        </div>
+                      </CardBody>
+                    </Card>
+                  </Link>
                 ))}
               </div>
             )}

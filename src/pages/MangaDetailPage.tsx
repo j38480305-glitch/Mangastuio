@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../hooks/useToast';
+import { ToastContainer } from '../components/ui/ToastContainer';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Card, CardBody } from '../components/ui/Card';
 import { Textarea } from '../components/ui/Textarea';
-import { Star, Eye, BookOpen, Heart, MessageCircle, UserPlus, Play } from 'lucide-react';
+import { Star, Eye, BookOpen, Heart, MessageCircle, UserPlus, Play, Share2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatNumber, formatDate } from '../lib/utils';
 
@@ -48,14 +50,28 @@ const DEMO_CHAPTERS: Chapter[] = [
 
 export function MangaDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
+  const { toasts, show: showToast, dismiss } = useToast();
   const [manga, setManga] = useState(DEMO_MANGA);
   const [chapters, setChapters] = useState<Chapter[]>(DEMO_CHAPTERS);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [activeTab, setActiveTab] = useState<'chapters' | 'comments'>('chapters');
+
+  // Load like/follow/bookmark state from localStorage
+  useEffect(() => {
+    if (!id) return;
+    const liked = localStorage.getItem(`liked-${id}`);
+    const followed = localStorage.getItem(`followed-${id}`);
+    const bookmarked = localStorage.getItem(`bookmarked-${id}`);
+    if (liked) setIsLiked(true);
+    if (followed) setIsFollowing(true);
+    if (bookmarked) setIsBookmarked(true);
+  }, [id]);
 
   useEffect(() => {
     async function fetchManga() {
@@ -78,8 +94,42 @@ export function MangaDetailPage() {
     fetchManga();
   }, [id]);
 
-  const handleComment = async () => {
-    if (!newComment.trim() || !user) return;
+  const handleLike = () => {
+    const next = !isLiked;
+    setIsLiked(next);
+    if (id) localStorage.setItem(`liked-${id}`, next ? '1' : '');
+    else localStorage.removeItem(`liked-${id}`);
+    showToast(next ? 'Added to liked!' : 'Removed from liked', 'info');
+  };
+
+  const handleFollow = () => {
+    const next = !isFollowing;
+    setIsFollowing(next);
+    if (id) localStorage.setItem(`followed-${id}`, next ? '1' : '');
+    else localStorage.removeItem(`followed-${id}`);
+    showToast(next ? 'Following creator!' : 'Unfollowed creator', 'info');
+  };
+
+  const handleBookmark = () => {
+    const next = !isBookmarked;
+    setIsBookmarked(next);
+    if (id) localStorage.setItem(`bookmarked-${id}`, next ? '1' : '');
+    else localStorage.removeItem(`bookmarked-${id}`);
+    showToast(next ? 'Bookmarked!' : 'Bookmark removed', 'info');
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied!');
+    } catch {
+      showToast('Failed to copy link', 'error');
+    }
+  };
+
+  const handleComment = () => {
+    if (!newComment.trim()) return;
     const comment: Comment = {
       id: crypto.randomUUID(),
       content: newComment,
@@ -88,10 +138,17 @@ export function MangaDetailPage() {
     };
     setComments((prev) => [comment, ...prev]);
     setNewComment('');
+    showToast('Comment posted!');
+  };
+
+  const handleStartReading = () => {
+    navigate(`/manga/${id}/chapter/1`);
   };
 
   return (
     <div className="min-h-screen bg-sand-50">
+      <ToastContainer toasts={toasts} dismiss={dismiss} />
+
       {/* Hero Banner */}
       <div className="relative h-64 sm:h-80 overflow-hidden">
         <img
@@ -146,16 +203,14 @@ export function MangaDetailPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link to={`/manga/${id}/chapter/1`}>
-                <Button size="lg" className="gap-2">
-                  <Play size={18} /> Start Reading
-                </Button>
-              </Link>
+              <Button size="lg" className="gap-2" onClick={handleStartReading}>
+                <Play size={18} /> Start Reading
+              </Button>
               <Button
                 variant="outline"
                 size="lg"
                 className="gap-2"
-                onClick={() => setIsBookmarked(!isBookmarked)}
+                onClick={handleBookmark}
               >
                 <Heart size={18} fill={isBookmarked ? 'currentColor' : 'none'} />
                 {isBookmarked ? 'Bookmarked' : 'Bookmark'}
@@ -164,10 +219,27 @@ export function MangaDetailPage() {
                 variant="outline"
                 size="lg"
                 className="gap-2"
-                onClick={() => setIsFollowing(!isFollowing)}
+                onClick={handleFollow}
               >
                 <UserPlus size={18} />
                 {isFollowing ? 'Following' : 'Follow'}
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="gap-2"
+                onClick={handleLike}
+              >
+                <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} className={isLiked ? 'text-red-500' : ''} />
+                {isLiked ? 'Liked' : 'Like'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="lg"
+                className="gap-2"
+                onClick={handleShare}
+              >
+                <Share2 size={18} /> Share
               </Button>
             </div>
           </div>
@@ -239,6 +311,17 @@ export function MangaDetailPage() {
                       Post Comment
                     </Button>
                   </div>
+                </CardBody>
+              </Card>
+            )}
+
+            {!user && (
+              <Card>
+                <CardBody className="text-center py-6 text-sand-400">
+                  <p className="text-sm">Sign in to leave a comment</p>
+                  <Link to="/login">
+                    <Button size="sm" variant="outline" className="mt-2">Sign In</Button>
+                  </Link>
                 </CardBody>
               </Card>
             )}

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useToast } from '../hooks/useToast';
+import { ToastContainer } from '../components/ui/ToastContainer';
 import { Card, CardBody } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { Search, Eye, BookOpen, Star, SlidersHorizontal, X } from 'lucide-react';
+import { Search, Eye, BookOpen, Star, SlidersHorizontal, X, Heart, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GENRES, formatNumber } from '../lib/utils';
 
@@ -102,6 +104,18 @@ export function DiscoverPage() {
   const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'newest'>('popular');
   const [showFilters, setShowFilters] = useState(false);
   const [mangaList, setMangaList] = useState<MangaSeries[]>(DEMO_MANGA);
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const { toasts, show: showToast, dismiss } = useToast();
+
+  // Load liked state from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('terramanga-liked');
+    if (saved) {
+      try {
+        setLikedIds(new Set(JSON.parse(saved)));
+      } catch { /* ignore */ }
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchManga() {
@@ -119,6 +133,35 @@ export function DiscoverPage() {
     fetchManga();
   }, []);
 
+  const toggleLike = (e: React.MouseEvent, mangaId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(mangaId)) {
+        next.delete(mangaId);
+        showToast('Removed from liked', 'info');
+      } else {
+        next.add(mangaId);
+        showToast('Added to liked!');
+      }
+      localStorage.setItem('terramanga-liked', JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const handleShare = async (e: React.MouseEvent, mangaId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = `${window.location.origin}/manga/${mangaId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied!');
+    } catch {
+      showToast('Failed to copy link', 'error');
+    }
+  };
+
   const filtered = mangaList.filter((m) => {
     const matchesSearch = !search ||
       m.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -135,6 +178,8 @@ export function DiscoverPage() {
 
   return (
     <div className="min-h-screen bg-sand-50">
+      <ToastContainer toasts={toasts} dismiss={dismiss} />
+
       <div className="page-container py-8">
         {/* Header */}
         <div className="mb-8">
@@ -248,6 +293,21 @@ export function DiscoverPage() {
                     />
                     <div className="absolute top-2 right-2 flex gap-1.5">
                       <Badge variant="info" className="text-[10px]">{manga.status}</Badge>
+                    </div>
+                    {/* Like & Share buttons */}
+                    <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => toggleLike(e, manga.id)}
+                        className="rounded-full bg-white/90 p-1.5 shadow-sm hover:bg-white transition-colors"
+                      >
+                        <Heart size={14} className={likedIds.has(manga.id) ? 'text-red-500 fill-red-500' : 'text-sand-500'} />
+                      </button>
+                      <button
+                        onClick={(e) => handleShare(e, manga.id)}
+                        className="rounded-full bg-white/90 p-1.5 shadow-sm hover:bg-white transition-colors"
+                      >
+                        <Share2 size={14} className="text-sand-500" />
+                      </button>
                     </div>
                   </div>
                   <CardBody>

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Maximize, Minimize, Settings, Bookmark, ArrowLeft, X } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useToast } from '../hooks/useToast';
+import { ToastContainer } from '../components/ui/ToastContainer';
+import { ChevronLeft, ChevronRight, Maximize, Minimize, Settings, Bookmark, ArrowLeft, X, SkipBack, SkipForward } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -15,8 +17,12 @@ const DEMO_PAGES = [
   'https://images.pexels.com/photos/7681832/pexels-photo-7681832.jpeg?auto=compress&cs=tinysrgb&w=800',
 ];
 
+const TOTAL_CHAPTERS = 6;
+
 export function MangaReaderPage() {
   const { id, chapterId } = useParams();
+  const navigate = useNavigate();
+  const { toasts, show: showToast, dismiss } = useToast();
   const [readingMode, setReadingMode] = useState<ReadingMode>('webtoon');
   const [currentPage, setCurrentPage] = useState(0);
   const [showControls, setShowControls] = useState(true);
@@ -26,6 +32,7 @@ export function MangaReaderPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const pages = DEMO_PAGES;
   const totalPages = pages.length;
+  const currentChapter = Number(chapterId) || 1;
 
   // Persist reading progress
   useEffect(() => {
@@ -39,14 +46,33 @@ export function MangaReaderPage() {
     localStorage.setItem(key, String(currentPage));
   }, [currentPage, id, chapterId]);
 
+  // Load bookmark state
+  useEffect(() => {
+    const key = `reader-bookmark-${id}-${chapterId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) setBookmarked(true);
+  }, [id, chapterId]);
+
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen();
-      setIsFullscreen(true);
+      containerRef.current?.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch(() => {
+        showToast('Fullscreen not supported', 'error');
+      });
     } else {
       document.exitFullscreen();
       setIsFullscreen(false);
     }
+  }, [showToast]);
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handler = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
   useEffect(() => {
@@ -58,7 +84,9 @@ export function MangaReaderPage() {
       } else if (e.key === 'f') {
         toggleFullscreen();
       } else if (e.key === 'Escape') {
-        setShowControls((prev) => !prev);
+        if (!document.fullscreenElement) {
+          setShowControls((prev) => !prev);
+        }
       }
     };
     window.addEventListener('keydown', handleKey);
@@ -68,8 +96,37 @@ export function MangaReaderPage() {
   const nextPage = () => setCurrentPage((p) => Math.min(p + 1, totalPages - 1));
   const prevPage = () => setCurrentPage((p) => Math.max(p - 1, 0));
 
+  const prevChapter = () => {
+    if (currentChapter > 1) {
+      navigate(`/manga/${id}/chapter/${currentChapter - 1}`);
+      setCurrentPage(0);
+    }
+  };
+
+  const nextChapter = () => {
+    if (currentChapter < TOTAL_CHAPTERS) {
+      navigate(`/manga/${id}/chapter/${currentChapter + 1}`);
+      setCurrentPage(0);
+    }
+  };
+
+  const handleBookmark = () => {
+    const next = !bookmarked;
+    setBookmarked(next);
+    const key = `reader-bookmark-${id}-${chapterId}`;
+    if (next) {
+      localStorage.setItem(key, JSON.stringify({ chapter: currentChapter, page: currentPage, savedAt: new Date().toISOString() }));
+      showToast('Bookmark saved!');
+    } else {
+      localStorage.removeItem(key);
+      showToast('Bookmark removed', 'info');
+    }
+  };
+
   return (
     <div ref={containerRef} className="relative min-h-screen bg-black">
+      <ToastContainer toasts={toasts} dismiss={dismiss} />
+
       {/* Top Controls */}
       <AnimatePresence>
         {showControls && (
@@ -87,16 +144,35 @@ export function MangaReaderPage() {
                   </Button>
                 </Link>
                 <div className="text-white">
-                  <p className="text-sm font-medium">Chapter 1</p>
+                  <p className="text-sm font-medium">Chapter {currentChapter}</p>
                   <p className="text-xs text-white/60">Hexagonal Warriors</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Chapter navigation */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/10"
+                  onClick={prevChapter}
+                  disabled={currentChapter <= 1}
+                >
+                  <SkipBack size={16} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/10"
+                  onClick={nextChapter}
+                  disabled={currentChapter >= TOTAL_CHAPTERS}
+                >
+                  <SkipForward size={16} />
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   className={`text-white hover:bg-white/10 gap-1 ${bookmarked ? 'text-ochre-400' : ''}`}
-                  onClick={() => setBookmarked(!bookmarked)}
+                  onClick={handleBookmark}
                 >
                   <Bookmark size={16} fill={bookmarked ? 'currentColor' : 'none'} />
                 </Button>
@@ -172,7 +248,6 @@ export function MangaReaderPage() {
         onClick={() => setShowControls((prev) => !prev)}
       >
         {readingMode === 'webtoon' ? (
-          /* Webtoon Scroll Mode */
           <div className="mx-auto max-w-2xl">
             {pages.map((page, i) => (
               <div key={i} className="relative">
@@ -186,7 +261,6 @@ export function MangaReaderPage() {
             ))}
           </div>
         ) : readingMode === 'double' ? (
-          /* Double Page spread */
           <div className="flex items-center justify-center min-h-[calc(100vh-7rem)] gap-1 px-4">
             {currentPage > 0 && (
               <img
@@ -202,7 +276,6 @@ export function MangaReaderPage() {
             />
           </div>
         ) : (
-          /* Single page / RTL mode */
           <div className="flex items-center justify-center min-h-[calc(100vh-7rem)] px-4">
             <img
               src={pages[currentPage]}
@@ -256,7 +329,7 @@ export function MangaReaderPage() {
         </motion.div>
       )}
 
-      {/* Click zones for page navigation (single/rtl/double modes) */}
+      {/* Click zones for page navigation */}
       {readingMode !== 'webtoon' && (
         <div className="absolute inset-0 z-10 flex" onClick={(e) => e.stopPropagation()}>
           <div className="w-1/3 h-full cursor-pointer" onClick={prevPage} />

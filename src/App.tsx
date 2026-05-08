@@ -9,6 +9,7 @@ import { DiscoverPage } from './pages/DiscoverPage';
 import { MangaDetailPage } from './pages/MangaDetailPage';
 import { MangaReaderPage } from './pages/MangaReaderPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 function Layout() {
   return (
@@ -29,7 +30,7 @@ function ReaderLayout() {
 function App() {
   return (
     <AuthProvider>
-     <BrowserRouter basename="/Mangastuio">
+      <BrowserRouter basename="/Mangastuio">
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
@@ -39,6 +40,7 @@ function App() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route element={<ReaderLayout />}>
             <Route path="/manga/:id/chapter/:chapterId" element={<MangaReaderPage />} />
