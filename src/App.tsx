@@ -29,7 +29,7 @@ function ReaderLayout() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+     <BrowserRouter basename="/Mangastuio">
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
