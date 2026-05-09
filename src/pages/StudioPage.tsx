@@ -1,4 +1,4 @@
-// Key changes to StudioPage.tsx:
+
 
 // 1. Add import for AIStoryWizard and PanelCanvas
 import { AIStoryWizard } from '../components/creator/AIStoryWizard';
